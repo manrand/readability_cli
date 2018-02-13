@@ -8,20 +8,20 @@ var targetURL;
 
 var destRoot;
 
-var FFX_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:38.0) Gecko/20100101 Firefox/38.0";
+const FFX_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:38.0) Gecko/20100101 Firefox/38.0";
 
 
 // Package dependencies
-var path = require("path");
-var fs = require("fs");
+const path = require("path");
+const fs = require("fs");
 const { JSDOM } = require("jsdom");
 const fetch = require('node-fetch');
-var Readability = require("readability");
-var prettyPrint = require("./utils").prettyPrint;
-
+const Readability = require("readability");
+const prettyPrint = require("./utils").prettyPrint;
+const minimist = require('minimist');
 
 // Argument Parsing
-var argv = require('minimist')(process.argv.slice(2));
+var argv = minimist(process.argv.slice(2));
 
 // Save results to folder with: '--save-folder {folder}'
 if (argv['save-folder']) {
