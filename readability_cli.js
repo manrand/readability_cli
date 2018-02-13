@@ -8,9 +8,7 @@ var serializeDocument = require("jsdom").serializeDocument;
 var http = require("http");
 var urlparse = require("url").parse;
 
-var readability = require("../index");
-var Readability = readability.Readability;
-var JSDOMParser = readability.JSDOMParser;
+var Readability = require("readability");
 
 var FFX_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:38.0) Gecko/20100101 Firefox/38.0";
 
