@@ -1,6 +1,7 @@
 
 
 // Globals
+var hrt_start, hrt_end;
 var debug = false;
 var saveFolder;
 var targetURL;
@@ -17,6 +18,7 @@ const { JSDOM } = require("jsdom");
 const fetch = require('node-fetch');
 var Readability = require("readability");
 var prettyPrint = require("./utils").prettyPrint;
+
 
 // Argument Parsing
 var argv = require('minimist')(process.argv.slice(2));
@@ -54,9 +56,14 @@ function fetchSource(URL, callbackFn) {
     process.exit(1);
     return;
   }
+  hrt_start = process.hrtime();
   fetch(URL)
         .then(function(result) {
             var HTMLData = result.text();
+
+            hrt_end = process.hrtime(hrt_start);
+            if (debug)
+                console.log(">> Execution time (hr): %ds %dms", hrt_end[0], hrt_end[1]/1000000);
 
             return HTMLData;
         })
@@ -76,6 +83,7 @@ function parseHTMLData(sourceURL, HTMLData) {
   var sourcePath;
   var destPath;
   var metadataDestPath;
+  hrt_start = process.hrtime();
   const _DOM = new JSDOM(HTMLData, JSDOM_OPTIONS);
   const _DOC = _DOM.window.document;
 
@@ -129,6 +137,9 @@ function parseHTMLData(sourceURL, HTMLData) {
   }
 
   if (debug) {
+      hrt_end = process.hrtime(hrt_start);
+      console.log(">> Execution time (hr): %ds %dms", hrt_end[0], hrt_end[1]/1000000);
+
       console.log("> URI    :" + result.uri);
       console.log("> Title  : " + result.title);
       console.log("> Excerpt: " + result.excerpt);
