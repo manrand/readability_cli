@@ -5,6 +5,7 @@ var hrt_start, hrt_end;
 var debug = false;
 var saveFolder;
 var targetURL;
+var stripHTML = false;
 
 var destRoot;
 
@@ -12,13 +13,14 @@ const FFX_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:38.0) Gecko/201
 
 
 // Package dependencies
-const path = require("path");
-const fs = require("fs");
-const { JSDOM } = require("jsdom");
-const fetch = require('node-fetch');
+const path        = require("path");
+const fs          = require("fs");
+const { JSDOM }   = require("jsdom");
+const fetch       = require('node-fetch');
+const minimist    = require('minimist');
 const Readability = require("readability");
 const prettyPrint = require("./utils").prettyPrint;
-const minimist = require('minimist');
+const textVersion = require("textversionjs");
 
 // Argument Parsing
 var argv = minimist(process.argv.slice(2));
@@ -36,6 +38,11 @@ if (argv['_'][0])
 // Enable Debug with: '--debug 1'
 if (argv['debug'] == 1)
     debug = true;
+
+// Strip HTML
+if (argv['strip-HTML'])
+    stripHTML = true;
+
 
 // Main
 if (destRoot === undefined) {
@@ -82,6 +89,15 @@ const JSDOM_OPTIONS = {
     features: {
         FetchExternalResources: false,
         ProcessExternalResources: false
+    }
+};
+
+const TEXTVERSION_OPTIONS = {
+    linkProcess: function(href, linkText) {
+        return linkText;
+    },
+    imgProcess: function(src, alt) {
+        return alt;
     }
 };
 
@@ -152,8 +168,13 @@ function parseHTMLData(sourceURL, HTMLData) {
       console.log("> By     :" + result.byline);
   }
 
+  if (stripHTML)
+      result.content = textVersion(prettyPrint(result.content), TEXTVERSION_OPTIONS);
+  else
+      result.content = prettyPrint(result.content);
+
   if (destPath) {
-      fs.writeFile(destPath, prettyPrint(result.content), function(fileWriteErr) {
+      fs.writeFile(destPath, result.content, function(fileWriteErr) {
           if (fileWriteErr) {
               console.error("Couldn't write result data to " + destPath);
               console.error(fileWriteErr);
@@ -161,7 +182,7 @@ function parseHTMLData(sourceURL, HTMLData) {
       });
   }
   else
-      console.log(prettyPrint(result.content));
+      console.log(result.content);
 
   // Delete the result data we don't care about.
   delete result.content;
