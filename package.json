@@ -3,6 +3,7 @@
   "dependencies": {
     "js-beautify": "^1.5.5",
     "jsdom": "^11.5.1",
+    "minimist": "^1.2.0",
     "node-fetch": "^1.7.3",
     "readability": "github:mozilla/readability"
   }

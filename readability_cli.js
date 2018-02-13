@@ -1,5 +1,16 @@
-var debug = true;
 
+
+// Globals
+var debug = false;
+var saveFolder;
+var targetURL;
+
+var destRoot;
+
+var FFX_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:38.0) Gecko/20100101 Firefox/38.0";
+
+
+// Package dependencies
 var path = require("path");
 var fs = require("fs");
 const { JSDOM } = require("jsdom");
@@ -7,22 +18,32 @@ const fetch = require('node-fetch');
 var Readability = require("readability");
 var prettyPrint = require("./utils").prettyPrint;
 
-var FFX_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:38.0) Gecko/20100101 Firefox/38.0";
+// Argument Parsing
+var argv = require('minimist')(process.argv.slice(2));
 
-if (process.argv.length < 3) {
-  console.error("Need at least a destination slug and potentially a URL (if the slug doesn't have source).");
-  process.exit(0);
-  throw "Abort";
+// Save results to folder with: '--save-folder {folder}'
+if (argv['save-folder']) {
+    saveFolder = argv['save-folder'];
+    destRoot = path.join(saveFolder);
 }
 
-var slug = process.argv[2];
-var argURL = process.argv[3]; // Could be undefined, we'll warn if it is if that is an issue.
+// URL is first param without '--' prefix
+if (argv['_'][0])
+    targetURL = argv['_'][0];
 
-var destRoot = path.join(slug);
+// Enable Debug with: '--debug 1'
+if (argv['debug'] == 1)
+    debug = true;
 
-fs.mkdir(destRoot, function(err) {
-  fetchSource(argURL, parseHTMLData);
-});
+// Main
+if (destRoot === undefined) {
+    fetchSource(targetURL, parseHTMLData);
+}
+else {
+    fs.mkdir(destRoot, function(err) {
+        fetchSource(targetURL, parseHTMLData);
+    });
+}
 
 function fetchSource(URL, callbackFn) {
   if (debug) {
@@ -52,27 +73,35 @@ const JSDOM_OPTIONS = {
 };
 
 function parseHTMLData(sourceURL, HTMLData) {
-  var sourcePath = path.join(destRoot, "source.html");
-  var destPath = path.join(destRoot, "result.html")
-  var metadataDestPath = path.join(destRoot, "result-metadata.json");
+  var sourcePath;
+  var destPath;
+  var metadataDestPath;
   const _DOM = new JSDOM(HTMLData, JSDOM_OPTIONS);
   const _DOC = _DOM.window.document;
 
   Node = _DOM.window.Node;
 
-  if (debug) {
-      console.log("Writing " + sourcePath);
+  if (destRoot !== undefined) {
+      sourcePath       = path.join(destRoot, "source.html");
+      destPath         = path.join(destRoot, "result.html")
+      metadataDestPath = path.join(destRoot, "result-metadata.json");
   }
 
   HTMLData = prettyPrint(_DOM.serialize());
 
-  fs.writeFile(sourcePath, HTMLData, function(err) {
-      if (err) {
-          console.error("Couldn't write data to " + sourcePath);
-          console.error(err);
-          return;
+  if (sourcePath) {
+      if (debug) {
+          console.log("Writing " + sourcePath);
       }
-  });
+
+      fs.writeFile(sourcePath, HTMLData, function(err) {
+          if (err) {
+              console.error("Couldn't write data to " + sourcePath);
+              console.error(err);
+              return;
+          }
+      });
+  }
 
   if (debug) {
     console.log("Parsing " + sourceURL);
@@ -106,12 +135,16 @@ function parseHTMLData(sourceURL, HTMLData) {
       console.log("> By     :" + result.byline);
   }
 
-  fs.writeFile(destPath, prettyPrint(result.content), function(fileWriteErr) {
-      if (fileWriteErr) {
-          console.error("Couldn't write result data to " + destPath);
-          console.error(fileWriteErr);
-      }
-  });
+  if (destPath) {
+      fs.writeFile(destPath, prettyPrint(result.content), function(fileWriteErr) {
+          if (fileWriteErr) {
+              console.error("Couldn't write result data to " + destPath);
+              console.error(fileWriteErr);
+          }
+      });
+  }
+  else
+      console.log(prettyPrint(result.content));
 
   // Delete the result data we don't care about.
   delete result.content;
@@ -121,12 +154,14 @@ function parseHTMLData(sourceURL, HTMLData) {
   // Add isProbablyReaderable result
   result.readerable = readerable;
 
-  fs.writeFile(metadataDestPath, JSON.stringify(result, null, 2) + "\n", function(metadataWriteErr) {
-      if (metadataWriteErr) {
-          console.error("Couldn't write data to expected-metadata.json!");
-          console.error(metadataWriteErr);
-      }
-  });
+  if (metadataDestPath) {
+      fs.writeFile(metadataDestPath, JSON.stringify(result, null, 2) + "\n", function(metadataWriteErr) {
+          if (metadataWriteErr) {
+              console.error("Couldn't write data to expected-metadata.json!");
+              console.error(metadataWriteErr);
+          }
+      });
+  }
 
   return;
 }
