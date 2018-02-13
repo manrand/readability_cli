@@ -47,6 +47,12 @@ else {
     });
 }
 
+var FETCH_OPTIONS = {
+    headers: {
+        "user-agent": FFX_UA,
+    }
+};
+
 function fetchSource(URL, callbackFn) {
   if (debug) {
       console.log("Fetching " + URL);
@@ -57,7 +63,7 @@ function fetchSource(URL, callbackFn) {
     return;
   }
   hrt_start = process.hrtime();
-  fetch(URL)
+  fetch(URL, FETCH_OPTIONS)
         .then(function(result) {
             var HTMLData = result.text();
 
