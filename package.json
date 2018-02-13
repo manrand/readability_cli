@@ -1,0 +1,8 @@
+{
+  "name": "readability_cli",
+  "dependencies": {
+    "jsdom": "^11.5.1",
+    "node-fetch": "^1.7.3",
+    "readability": "github:mozilla/readability"
+  }
+}
