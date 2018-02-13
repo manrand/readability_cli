@@ -1,13 +1,9 @@
-var debug = false;
+var debug = true;
 
 var path = require("path");
 var fs = require("fs");
-var jsdom = require("jsdom").jsdom;
-var prettyPrint = require("./utils").prettyPrint;
-var serializeDocument = require("jsdom").serializeDocument;
-var http = require("http");
-var urlparse = require("url").parse;
-
+const { JSDOM } = require("jsdom");
+const fetch = require('node-fetch');
 var Readability = require("readability");
 
 var FFX_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:38.0) Gecko/20100101 Firefox/38.0";
@@ -21,143 +17,106 @@ if (process.argv.length < 3) {
 var slug = process.argv[2];
 var argURL = process.argv[3]; // Could be undefined, we'll warn if it is if that is an issue.
 
-var destRoot = path.join(__dirname, "test-pages", slug);
+var destRoot = path.join(slug);
 
 fs.mkdir(destRoot, function(err) {
-  if (err) {
-    var sourceFile = path.join(destRoot, "source.html");
-    fs.exists(sourceFile, function(exists) {
-      if (exists) {
-        fs.readFile(sourceFile, {encoding: "utf-8"}, function(readFileErr, data) {
-          if (readFileErr) {
-            console.error("Source existed but couldn't be read?");
-            process.exit(1);
-            return;
-          }
-          onResponseReceived(data);
-        });
-      } else {
-        fetchSource(argURL, onResponseReceived);
-      }
-    });
-    return;
-  }
-  fetchSource(argURL, onResponseReceived);
+  fetchSource(argURL, parseHTMLData);
 });
 
-function fetchSource(url, callbackFn) {
-  if (!url) {
+function fetchSource(URL, callbackFn) {
+  if (debug) {
+      console.log("Fetching " + URL);
+  }
+  if (!URL) {
     console.error("You should pass a URL if the source doesn't exist yet!");
     process.exit(1);
     return;
   }
-  var client = http;
-  if (url.indexOf("https") == 0) {
-    client = require("https");
-  }
-  var options = urlparse(url);
-  options.headers = {'User-Agent': FFX_UA};
+  fetch(URL)
+        .then(function(result) {
+            if (debug) {
+                console.log("Writing " + "source.html");
+            }
+            var HTMLData = result.text();
 
-  client.get(options, function(response) {
-    if (debug) {
-      console.log("STATUS:", response.statusCode);
-      console.log("HEADERS:", JSON.stringify(response.headers));
-    }
-    response.setEncoding("utf-8");
-    var rv = "";
-    response.on("data", function(chunk) {
-      rv += chunk;
-    });
-    response.on("end", function() {
-      if (debug) {
-        console.log("End received");
-      }
-      // Sanitize:
-      rv = prettyPrint(serializeDocument(jsdom(rv)));
-      callbackFn(rv);
-    });
-  });
+            var sourcePath = path.join(destRoot, "source.html");
+            fs.writeFile(sourcePath, HTMLData, function(err) {
+                if (err) {
+                    console.error("Couldn't write data to source.html!");
+                    console.error(err);
+                    return;
+                }
+            });
+
+            return HTMLData;
+        })
+        .then(function(HTMLData) {
+            return callbackFn(URL, HTMLData);
+        });
 }
 
-function onResponseReceived(source) {
+const JSDOM_OPTIONS = {features: {
+    FetchExternalResources: false,
+    ProcessExternalResources: false
+}};
+
+function parseHTMLData(sourceURL, HTMLData) {
   if (debug) {
-    console.log("writing");
+    console.log("Parsing " + sourceURL);
   }
-  var sourcePath = path.join(destRoot, "source.html");
-  fs.writeFile(sourcePath, source, function(err) {
-    if (err) {
-      console.error("Couldn't write data to source.html!");
-      console.error(err);
-      return;
-    }
-    if (debug) {
-      console.log("Running readability stuff");
-    }
-    runReadability(source, path.join(destRoot, "expected.html"), path.join(destRoot, "expected-metadata.json"));
-  });
-}
+  var destPath = path.join(destRoot, "result.html")
+  var metadataDestPath = path.join(destRoot, "result-metadata.json");
+  const _DOM = new JSDOM(HTMLData, JSDOM_OPTIONS);
+  const _DOC = _DOM.window.document;
 
-function runReadability(source, destPath, metadataDestPath) {
-  var doc = new JSDOMParser().parse(source);
-  var uri = {
-    spec: "http://fakehost/test/page.html",
-    host: "fakehost",
-    prePath: "http://fakehost",
-    scheme: "http",
-    pathBase: "http://fakehost/test/"
-  };
-  var myReader, result, readerable;
+  Node = _DOM.window.Node;
+
+  var result;
+  var readerable;
   try {
-    // We pass `caption` as a class to check that passing in extra classes works,
-    // given that it appears in some of the test documents.
-    myReader = new Readability(uri, doc, { classesToPreserve: ["caption"] });
-    result = myReader.parse();
-  } catch (ex) {
-    console.error(ex);
-    ex.stack.forEach(console.log.bind(console));
+      const reader = new Readability(sourceURL, _DOC);
+
+      readerable = reader.isProbablyReaderable();
+      result     = reader.parse();
+  } catch (exception) {
+      console.error(exception);
+      exception.stack.forEach(console.log.bind(console));
   }
-  // Use jsdom for isProbablyReaderable because it supports querySelectorAll
-  try {
-    var jsdomDoc = jsdom(source, {
-      features: {
-        FetchExternalResources: false,
-        ProcessExternalResources: false
-      }
-    });
-    myReader = new Readability(uri, jsdomDoc);
-    readerable = myReader.isProbablyReaderable();
-  } catch (ex) {
-    console.error(ex);
-    ex.stack.forEach(console.log.bind(console));
-  }
+
   if (!result) {
-    console.error("No content generated by readability, not going to write expected.html!");
-    return;
+      console.error("No content generated by readability, not going to write expected.html!");
+      return;
   }
 
-  fs.writeFile(destPath, prettyPrint(result.content), function(fileWriteErr) {
-    if (fileWriteErr) {
-      console.error("Couldn't write data to expected.html!");
-      console.error(fileWriteErr);
-    }
+  if (debug) {
+      console.log("> URI    :" + result.uri);
+      console.log("> Title  : " + result.title);
+      console.log("> Excerpt: " + result.excerpt);
+      console.log("> By     :" + result.byline);
+  }
 
-    // Delete the result data we don't care about checking.
-    delete result.uri;
-    delete result.content;
-    delete result.textContent;
-    delete result.length;
-
-    // Add isProbablyReaderable result
-    result.readerable = readerable;
-
-    fs.writeFile(metadataDestPath, JSON.stringify(result, null, 2) + "\n", function(metadataWriteErr) {
-      if (metadataWriteErr) {
-        console.error("Couldn't write data to expected-metadata.json!");
-        console.error(metadataWriteErr);
+  fs.writeFile(destPath, result.content, function(fileWriteErr) {
+      if (fileWriteErr) {
+          console.error("Couldn't write result data to " + destPath);
+          console.error(fileWriteErr);
       }
-
-      process.exit(0);
-    });
   });
-}
 
+  // Delete the result data we don't care about.
+  delete result.uri;
+  delete result.content;
+  delete result.textContent;
+  delete result.length;
+
+  // Add isProbablyReaderable result
+  result.readerable = readerable;
+
+  fs.writeFile(metadataDestPath, JSON.stringify(result, null, 2) + "\n", function(metadataWriteErr) {
+      if (metadataWriteErr) {
+          console.error("Couldn't write data to expected-metadata.json!");
+          console.error(metadataWriteErr);
+      }
+  });
+
+  return;
+}
