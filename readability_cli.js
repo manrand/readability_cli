@@ -5,6 +5,7 @@ var fs = require("fs");
 const { JSDOM } = require("jsdom");
 const fetch = require('node-fetch');
 var Readability = require("readability");
+var prettyPrint = require("./utils").prettyPrint;
 
 var FFX_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.10; rv:38.0) Gecko/20100101 Firefox/38.0";
 
@@ -34,19 +35,7 @@ function fetchSource(URL, callbackFn) {
   }
   fetch(URL)
         .then(function(result) {
-            if (debug) {
-                console.log("Writing " + "source.html");
-            }
             var HTMLData = result.text();
-
-            var sourcePath = path.join(destRoot, "source.html");
-            fs.writeFile(sourcePath, HTMLData, function(err) {
-                if (err) {
-                    console.error("Couldn't write data to source.html!");
-                    console.error(err);
-                    return;
-                }
-            });
 
             return HTMLData;
         })
@@ -55,15 +44,15 @@ function fetchSource(URL, callbackFn) {
         });
 }
 
-const JSDOM_OPTIONS = {features: {
-    FetchExternalResources: false,
-    ProcessExternalResources: false
-}};
+const JSDOM_OPTIONS = {
+    features: {
+        FetchExternalResources: false,
+        ProcessExternalResources: false
+    }
+};
 
 function parseHTMLData(sourceURL, HTMLData) {
-  if (debug) {
-    console.log("Parsing " + sourceURL);
-  }
+  var sourcePath = path.join(destRoot, "source.html");
   var destPath = path.join(destRoot, "result.html")
   var metadataDestPath = path.join(destRoot, "result-metadata.json");
   const _DOM = new JSDOM(HTMLData, JSDOM_OPTIONS);
@@ -71,12 +60,34 @@ function parseHTMLData(sourceURL, HTMLData) {
 
   Node = _DOM.window.Node;
 
+  if (debug) {
+      console.log("Writing " + sourcePath);
+  }
+
+  HTMLData = prettyPrint(_DOM.serialize());
+
+  fs.writeFile(sourcePath, HTMLData, function(err) {
+      if (err) {
+          console.error("Couldn't write data to " + sourcePath);
+          console.error(err);
+          return;
+      }
+  });
+
+  if (debug) {
+    console.log("Parsing " + sourceURL);
+  }
+
   var result;
   var readerable;
   try {
       const reader = new Readability(sourceURL, _DOC);
 
       readerable = reader.isProbablyReaderable();
+      /*
+         NOTE: the order is important here.
+         Indeed, calling parse() first will make isProbablyReaderable() to always return false
+      */
       result     = reader.parse();
   } catch (exception) {
       console.error(exception);
@@ -95,7 +106,7 @@ function parseHTMLData(sourceURL, HTMLData) {
       console.log("> By     :" + result.byline);
   }
 
-  fs.writeFile(destPath, result.content, function(fileWriteErr) {
+  fs.writeFile(destPath, prettyPrint(result.content), function(fileWriteErr) {
       if (fileWriteErr) {
           console.error("Couldn't write result data to " + destPath);
           console.error(fileWriteErr);
@@ -103,7 +114,6 @@ function parseHTMLData(sourceURL, HTMLData) {
   });
 
   // Delete the result data we don't care about.
-  delete result.uri;
   delete result.content;
   delete result.textContent;
   delete result.length;
