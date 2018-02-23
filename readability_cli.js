@@ -6,6 +6,7 @@ var debug = false;
 var saveFolder;
 var targetURL;
 var stripHTML = false;
+var useUTF8 = false;
 
 var destRoot;
 
@@ -21,6 +22,7 @@ const minimist    = require('minimist');
 const Readability = require("readability");
 const prettyPrint = require("./utils").prettyPrint;
 const textVersion = require("textversionjs");
+const utf8codec   = require("utf8");
 
 // Argument Parsing
 var argv = minimist(process.argv.slice(2));
@@ -42,6 +44,9 @@ if (argv['debug'] == 1)
 // Strip HTML
 if (argv['strip-HTML'])
     stripHTML = true;
+
+if (argv['use-UTF8'])
+    useUTF8 = !!argv['use-UTF8'];
 
 
 // Main
@@ -172,6 +177,9 @@ function parseHTMLData(sourceURL, HTMLData) {
         result.content = textVersion(prettyPrint(result.content), TEXTVERSION_OPTIONS);
     else
         result.content = prettyPrint(result.content);
+
+    if (useUTF8)
+        result.content = utf8codec.encode(result.content)
 
     if (destPath) {
         fs.writeFile(destPath, result.content, function(fileWriteErr) {
